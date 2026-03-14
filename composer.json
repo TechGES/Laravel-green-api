@@ -1,5 +1,6 @@
 {
     "name": "ges/laravel-green-api",
+    "version": "1.0.0",
     "description": "Core Green API integration for Laravel.",
     "type": "library",
     "license": "MIT",
