@@ -1,0 +1,34 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('green_api_configs', function (Blueprint $table): void {
+            $table->id();
+            $table->string('api_url')->nullable();
+            $table->string('media_url')->nullable();
+            $table->string('instance_id')->nullable();
+            $table->text('token')->nullable();
+            $table->string('test_chat_id')->nullable();
+            $table->string('webhook_url')->nullable();
+            $table->text('webhook_authorization_header')->nullable();
+            $table->string('instance_state')->nullable();
+            $table->string('last_webhook_type')->nullable();
+            $table->timestamp('last_connection_checked_at')->nullable();
+            $table->timestamp('last_webhook_received_at')->nullable();
+            $table->timestamp('last_webhook_synced_at')->nullable();
+            $table->json('last_webhook_payload')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('green_api_configs');
+    }
+};

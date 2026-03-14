@@ -1,0 +1,29 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('green_api_conversations', function (Blueprint $table): void {
+            $table->id();
+            $table->string('contact_id')->nullable()->index();
+            $table->string('chat_id')->unique();
+            $table->string('phone')->nullable()->index();
+            $table->string('last_message_direction')->nullable();
+            $table->string('last_message_type')->nullable();
+            $table->string('last_message_preview', 255)->nullable();
+            $table->unsignedInteger('unread_count')->default(0);
+            $table->timestamp('last_message_at')->nullable();
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('green_api_conversations');
+    }
+};
