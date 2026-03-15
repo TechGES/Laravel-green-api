@@ -19,6 +19,8 @@ class GreenApiWebhookRequest extends FormRequest
         return [
             'typeWebhook' => ['required', 'string'],
             'timestamp' => ['nullable', 'integer'],
+            'idMessage' => ['sometimes', 'string'],
+            'chatId' => ['sometimes', 'string'],
             'instanceData' => ['required', 'array'],
             'instanceData.idInstance' => ['nullable'],
             'instanceData.wid' => ['nullable', 'string'],
