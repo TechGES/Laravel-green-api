@@ -125,11 +125,16 @@ class GreenApiInboxService
     {
         $summary = $this->greenApiService->summarizeWebhook($payload);
         $config = $this->currentConfig();
+        $instanceState = $config->instance_state;
+
+        if ($summary['category'] === 'authorization_state') {
+            $instanceState = is_string($payload['stateInstance'] ?? null)
+                ? $payload['stateInstance']
+                : null;
+        }
 
         $config->update([
-            'instance_state' => $summary['category'] === 'authorization_state'
-                ? (is_string($payload['stateInstance'] ?? null) ? $payload['stateInstance'] : null)
-                : $config->instance_state,
+            'instance_state' => $instanceState,
             'last_webhook_type' => $summary['typeWebhook'],
             'last_webhook_received_at' => now(),
             'last_webhook_payload' => $payload,
@@ -204,17 +209,24 @@ class GreenApiInboxService
      * @param  array<string, mixed>  $payload
      * @param  array{typeWebhook: string, messageType: ?string, category: string, supported: bool}  $summary
      */
-    private function storeWebhookMessage(GreenApiConversation $conversation, array $payload, array $summary): GreenApiMessage
+    private function storeWebhookMessage(GreenApiConversation $conversation, array $payload, array $summary): ?GreenApiMessage
     {
-        $message = GreenApiMessage::query()->firstOrNew([
-            'remote_message_id' => $this->extractRemoteMessageId($payload) ?? Str::ulid()->toBase32(),
-        ]);
+        $message = $this->resolveWebhookMessage($payload, $summary);
 
-        $message->fill([
+        if ($message === null) {
+            return null;
+        }
+
+        $attributes = [
             'green_api_conversation_id' => $conversation->id,
             'remote_chat_id' => $conversation->chat_id,
             'direction' => $this->resolveDirection($summary['category']),
             'webhook_type' => $summary['typeWebhook'],
+            'sent_at' => $message->sent_at ?? now(),
+            'raw_data' => $payload,
+        ];
+
+        foreach ([
             'message_type' => $summary['messageType'],
             'status' => $this->extractStatus($payload),
             'body' => $this->extractBody($payload),
@@ -222,16 +234,21 @@ class GreenApiInboxService
             'file_name' => $this->extractFileName($payload),
             'mime_type' => $this->extractMimeType($payload),
             'file_url' => $this->extractFileUrl($payload),
-            'sent_at' => $message->sent_at ?? now(),
-            'raw_data' => $payload,
-        ]);
+        ] as $key => $value) {
+            if ($value !== null) {
+                $attributes[$key] = $value;
+            }
+        }
+
+        $message->fill($attributes);
 
         if ($message->status === 'delivered') {
-            $message->delivered_at = now();
+            $message->delivered_at ??= now();
         }
 
         if ($message->status === 'read') {
-            $message->read_at = now();
+            $message->delivered_at ??= now();
+            $message->read_at ??= now();
         }
 
         $message->save();
@@ -246,13 +263,15 @@ class GreenApiInboxService
                 default => trans('green-api::messages.preview.default'),
             };
 
-        $this->touchConversation(
-            $conversation,
-            $message->direction,
-            $message->message_type,
-            $preview,
-            $message->direction === 'incoming'
-        );
+        if ($summary['category'] !== 'outgoing_status') {
+            $this->touchConversation(
+                $conversation,
+                $message->direction,
+                $message->message_type,
+                $preview,
+                $message->direction === 'incoming'
+            );
+        }
 
         return $message;
     }
@@ -342,9 +361,11 @@ class GreenApiInboxService
 
     private function isTemporaryUploadedFile(mixed $file): bool
     {
+        $temporaryUploadedFileClass = 'Livewire\\Features\\SupportFileUploads\\TemporaryUploadedFile';
+
         return is_object($file)
-            && class_exists('Livewire\\Features\\SupportFileUploads\\TemporaryUploadedFile')
-            && $file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+            && class_exists($temporaryUploadedFileClass)
+            && is_a($file, $temporaryUploadedFileClass);
     }
 
     /**
@@ -374,9 +395,21 @@ class GreenApiInboxService
      */
     private function extractRemoteMessageId(array $payload): ?string
     {
-        $candidate = $payload['idMessage'] ?? data_get($payload, 'idMessage');
+        $candidates = [
+            $payload['idMessage'] ?? null,
+            data_get($payload, 'messageData.idMessage'),
+            data_get($payload, 'messageData.stanzaId'),
+            data_get($payload, 'body.idMessage'),
+            data_get($payload, 'body.messageData.idMessage'),
+        ];
 
-        return is_string($candidate) && $candidate !== '' ? $candidate : null;
+        foreach ($candidates as $candidate) {
+            if (is_string($candidate) && $candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -497,5 +530,28 @@ class GreenApiInboxService
             'api_message', 'outgoing_status', 'authorization_state' => 'outgoing_api',
             default => 'incoming',
         };
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array{typeWebhook: string, messageType: ?string, category: string, supported: bool}  $summary
+     */
+    private function resolveWebhookMessage(array $payload, array $summary): ?GreenApiMessage
+    {
+        $remoteMessageId = $this->extractRemoteMessageId($payload);
+
+        if ($remoteMessageId !== null) {
+            return GreenApiMessage::query()->firstOrNew([
+                'remote_message_id' => $remoteMessageId,
+            ]);
+        }
+
+        if ($summary['category'] === 'outgoing_status') {
+            return null;
+        }
+
+        return GreenApiMessage::query()->make([
+            'remote_message_id' => Str::ulid()->toBase32(),
+        ]);
     }
 }

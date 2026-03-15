@@ -8,6 +8,7 @@ use Ges\LaravelGreenApi\Models\GreenApiMessage;
 use Ges\LaravelGreenApi\Services\GreenApiInboxService;
 use Ges\LaravelGreenApi\Tests\Fixtures\User;
 use Ges\LaravelGreenApi\Tests\TestCase;
+use Illuminate\Support\Carbon;
 
 class GreenApiInboxServiceTest extends TestCase
 {
@@ -66,5 +67,88 @@ class GreenApiInboxServiceTest extends TestCase
         $this->assertSame(1, GreenApiConversation::query()->count());
         $this->assertSame((string) $user->getKey(), GreenApiConversation::query()->first()->contact_id);
         $this->assertSame(1, GreenApiConversation::query()->first()->unread_count);
+    }
+
+    public function test_outgoing_status_webhook_updates_existing_message_without_creating_duplicate(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Jane Doe',
+            'phone' => '+33 6 12 34 56 78',
+        ]);
+
+        $service = $this->app->make(GreenApiInboxService::class);
+        $conversation = $service->ensureConversationForContact($user);
+        $lastMessageAt = Carbon::parse('2026-03-15 10:00:00');
+
+        $conversation->update([
+            'last_message_direction' => 'outgoing_api',
+            'last_message_type' => 'textMessage',
+            'last_message_preview' => 'Hello there',
+            'last_message_at' => $lastMessageAt,
+        ]);
+
+        $existingMessage = GreenApiMessage::query()->create([
+            'green_api_conversation_id' => $conversation->id,
+            'remote_message_id' => 'msg-1',
+            'remote_chat_id' => $conversation->chat_id,
+            'direction' => 'outgoing_api',
+            'webhook_type' => 'outgoingAPIMessageReceived',
+            'message_type' => 'textMessage',
+            'status' => 'sent',
+            'body' => 'Hello there',
+            'sent_at' => $lastMessageAt,
+            'raw_data' => ['idMessage' => 'msg-1'],
+        ]);
+
+        $message = $service->ingestWebhook([
+            'typeWebhook' => 'outgoingMessageStatus',
+            'timestamp' => time(),
+            'idMessage' => 'msg-1',
+            'chatId' => $conversation->chat_id,
+            'status' => 'read',
+            'instanceData' => [
+                'idInstance' => '123',
+            ],
+        ]);
+
+        $this->assertNotNull($message);
+        $this->assertSame($existingMessage->id, $message->id);
+        $this->assertSame(1, GreenApiMessage::query()->count());
+
+        $existingMessage->refresh();
+        $conversation->refresh();
+
+        $this->assertSame('read', $existingMessage->status);
+        $this->assertSame('Hello there', $existingMessage->body);
+        $this->assertSame('textMessage', $existingMessage->message_type);
+        $this->assertNotNull($existingMessage->read_at);
+        $this->assertNotNull($existingMessage->delivered_at);
+        $this->assertTrue($conversation->last_message_at->equalTo($lastMessageAt));
+        $this->assertSame('Hello there', $conversation->last_message_preview);
+    }
+
+    public function test_outgoing_status_webhook_without_message_id_does_not_create_placeholder_message(): void
+    {
+        $user = User::query()->create([
+            'name' => 'Jane Doe',
+            'phone' => '+33 6 12 34 56 78',
+        ]);
+
+        $service = $this->app->make(GreenApiInboxService::class);
+        $conversation = $service->ensureConversationForContact($user);
+
+        $message = $service->ingestWebhook([
+            'typeWebhook' => 'outgoingMessageStatus',
+            'timestamp' => time(),
+            'chatId' => $conversation->chat_id,
+            'status' => 'read',
+            'instanceData' => [
+                'idInstance' => '123',
+            ],
+        ]);
+
+        $this->assertNull($message);
+        $this->assertSame(1, GreenApiConversation::query()->count());
+        $this->assertSame(0, GreenApiMessage::query()->count());
     }
 }
