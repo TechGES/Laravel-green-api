@@ -6,7 +6,7 @@ Laravel package for Green API inbound webhooks, outbound messaging, and a persis
 
 ```bash
 composer require ges/laravel-green-api
-php artisan laravel-green-api:install
+php artisan green-api:install
 php artisan migrate
 ```
 
