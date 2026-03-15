@@ -2,6 +2,7 @@
 
 namespace Ges\LaravelGreenApi\Models;
 
+use Ges\LaravelGreenApi\Relations\CastsOwnerKeyToStringBelongsTo;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -33,8 +34,16 @@ class GreenApiConversation extends Model
     {
         /** @var class-string<\Illuminate\Database\Eloquent\Model> $contactModel */
         $contactModel = config('green_api.contact_model', 'App\\Models\\User');
+        $instance = new $contactModel;
+        $instance->setConnection($this->getConnectionName());
 
-        return $this->belongsTo($contactModel, 'contact_id');
+        return new CastsOwnerKeyToStringBelongsTo(
+            $instance->newQuery(),
+            $this,
+            'contact_id',
+            $instance->getKeyName(),
+            'contact'
+        );
     }
 
     public function messages(): HasMany

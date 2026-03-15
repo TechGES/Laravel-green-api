@@ -5,6 +5,7 @@ namespace Ges\LaravelGreenApi;
 use Ges\LaravelGreenApi\Commands\CheckGreenApiConnectionCommand;
 use Ges\LaravelGreenApi\Commands\SyncGreenApiWebhookCommand;
 use Ges\LaravelGreenApi\Models\GreenApiConversation;
+use Ges\LaravelGreenApi\Relations\CastsOwnerKeyToStringHasOne;
 use Ges\LaravelGreenApi\Services\GreenApiInboxService;
 use Ges\LaravelGreenApi\Services\GreenApiService;
 use Ges\LaravelGreenApi\Support\GreenApiContactManager;
@@ -69,8 +70,12 @@ class GreenApiServiceProvider extends PackageServiceProvider
         }
 
         $contactModel::resolveRelationUsing('greenApiConversation', function (Model $model) {
-            return $model->hasOne(
-                GreenApiConversation::class,
+            $instance = new GreenApiConversation;
+            $instance->setConnection($model->getConnectionName());
+
+            return new CastsOwnerKeyToStringHasOne(
+                $instance->newQuery(),
+                $model,
                 'contact_id',
                 $model->getKeyName()
             );
