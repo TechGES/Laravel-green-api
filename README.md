@@ -44,3 +44,45 @@ $conversation = $user->greenApiConversation;
 ```
 
 Inbound webhooks are exposed at `POST /green-api/webhook`.
+
+## Notifications
+
+The package also exposes a Laravel notification channel via `GreenApiChannel`.
+
+```php
+use Ges\LaravelGreenApi\Notifications\GreenApiChannel;
+use Ges\LaravelGreenApi\Notifications\GreenApiMessage;
+use Illuminate\Notifications\Notification;
+
+class InvoicePaid extends Notification
+{
+    public function via(object $notifiable): array
+    {
+        return [GreenApiChannel::class];
+    }
+
+    public function toGreenApi(object $notifiable): GreenApiMessage
+    {
+        return GreenApiMessage::make('Invoice paid.');
+    }
+}
+```
+
+For file delivery:
+
+```php
+public function toGreenApi(object $notifiable): GreenApiMessage
+{
+    return GreenApiMessage::make()
+        ->file(storage_path('app/invoice.pdf'), 'Invoice attached', 'invoice.pdf');
+}
+```
+
+When the notifiable is the configured contact model, notifications are persisted into the package inbox. For anonymous or non-model notifiables, route the destination with `green_api`:
+
+```php
+use Illuminate\Support\Facades\Notification;
+
+Notification::route('green_api', '+33 6 12 34 56 78')
+    ->notify(new InvoicePaid);
+```
