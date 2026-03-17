@@ -5,11 +5,13 @@ namespace Ges\LaravelGreenApi;
 use Ges\LaravelGreenApi\Commands\CheckGreenApiConnectionCommand;
 use Ges\LaravelGreenApi\Commands\SyncGreenApiWebhookCommand;
 use Ges\LaravelGreenApi\Models\GreenApiConversation;
+use Ges\LaravelGreenApi\Notifications\GreenApiChannel;
 use Ges\LaravelGreenApi\Relations\CastsOwnerKeyToStringHasOne;
 use Ges\LaravelGreenApi\Services\GreenApiInboxService;
 use Ges\LaravelGreenApi\Services\GreenApiService;
 use Ges\LaravelGreenApi\Support\GreenApiContactManager;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Notifications\ChannelManager;
 use Spatie\LaravelPackageTools\Commands\InstallCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -62,6 +64,12 @@ class GreenApiServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        $channelManager = $this->app->make(ChannelManager::class);
+
+        foreach (['green_api', GreenApiChannel::class] as $driver) {
+            $channelManager->extend($driver, fn ($app): GreenApiChannel => $app->make(GreenApiChannel::class));
+        }
+
         /** @var class-string<Model>|mixed $contactModel */
         $contactModel = config('green_api.contact_model');
 

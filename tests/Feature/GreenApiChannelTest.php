@@ -120,4 +120,37 @@ class GreenApiChannelTest extends TestCase
                 && ($payload['message'] ?? null) === 'Anonymous delivery';
         });
     }
+
+    public function test_it_supports_the_green_api_driver_alias(): void
+    {
+        Http::fake([
+            'https://api.example.test/*' => Http::response([
+                'idMessage' => 'msg-4',
+                'statusMessage' => 'sent',
+            ]),
+        ]);
+
+        $notifiable = new AnonymousNotifiable;
+        $notifiable->route('green_api', '+33 6 12 34 56 78');
+        $notifiable->notify(new class extends Notification
+        {
+            public function via(object $notifiable): array
+            {
+                return ['green_api'];
+            }
+
+            public function toGreenApi(object $notifiable): string
+            {
+                return 'Alias delivery';
+            }
+        });
+
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+
+            return str_contains($request->url(), '/waInstance123456/sendMessage/secret')
+                && ($payload['chatId'] ?? null) === '33612345678@c.us'
+                && ($payload['message'] ?? null) === 'Alias delivery';
+        });
+    }
 }

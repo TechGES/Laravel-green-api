@@ -68,6 +68,15 @@ class InvoicePaid extends Notification
 }
 ```
 
+You can also use the driver alias if you prefer:
+
+```php
+public function via(object $notifiable): array
+{
+    return ['green_api'];
+}
+```
+
 For file delivery:
 
 ```php
