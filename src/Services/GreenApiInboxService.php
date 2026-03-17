@@ -101,6 +101,13 @@ class GreenApiInboxService
         ]);
     }
 
+    public function checkWhatsapp(Model $contact): bool
+    {
+        return $this->greenApiService->checkWhatsapp(
+            $this->greenApiContactManager->phone($contact)
+        );
+    }
+
     public function sendFileMessage(
         Model $contact,
         mixed $file,

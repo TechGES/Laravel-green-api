@@ -90,6 +90,21 @@ class GreenApiService
         ]);
     }
 
+    public function checkWhatsapp(int|string $phoneNumber): bool
+    {
+        $response = $this->jsonRequest('POST', $this->apiEndpoint('checkWhatsapp'), [
+            'phoneNumber' => $this->normalizePhoneNumber($phoneNumber),
+        ]);
+
+        $existsWhatsapp = $response['existsWhatsapp'] ?? null;
+
+        if (! is_bool($existsWhatsapp)) {
+            throw new RuntimeException('Green API returned an invalid checkWhatsapp response.');
+        }
+
+        return $existsWhatsapp;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -452,6 +467,23 @@ class GreenApiService
         return $this->decodeJson($this->throwIfFailed($response, 'Unable to upload file to Green API.'));
     }
 
+    private function normalizePhoneNumber(int|string $phoneNumber): string
+    {
+        $normalizedPhoneNumber = preg_replace('/\D+/', '', (string) $phoneNumber);
+
+        if (! is_string($normalizedPhoneNumber) || $normalizedPhoneNumber === '') {
+            throw new RuntimeException('Green API phone number must contain digits only.');
+        }
+
+        $length = strlen($normalizedPhoneNumber);
+
+        if ($length < 11 || $length > 16) {
+            throw new RuntimeException('Green API phone number must contain between 11 and 16 digits.');
+        }
+
+        return $normalizedPhoneNumber;
+    }
+
     private function configuredOptionalString(string $key): ?string
     {
         $persistedConfig = $this->persistedConfig();
@@ -491,8 +523,10 @@ class GreenApiService
 
     private function isTemporaryUploadedFile(mixed $file): bool
     {
+        $temporaryUploadedFileClass = 'Livewire\\Features\\SupportFileUploads\\TemporaryUploadedFile';
+
         return is_object($file)
-            && class_exists('Livewire\\Features\\SupportFileUploads\\TemporaryUploadedFile')
-            && $file instanceof \Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+            && class_exists($temporaryUploadedFileClass)
+            && $file instanceof $temporaryUploadedFileClass;
     }
 }

@@ -9,6 +9,7 @@ use Ges\LaravelGreenApi\Services\GreenApiInboxService;
 use Ges\LaravelGreenApi\Tests\Fixtures\User;
 use Ges\LaravelGreenApi\Tests\TestCase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 
 class GreenApiInboxServiceTest extends TestCase
 {
@@ -150,5 +151,49 @@ class GreenApiInboxServiceTest extends TestCase
         $this->assertNull($message);
         $this->assertSame(1, GreenApiConversation::query()->count());
         $this->assertSame(0, GreenApiMessage::query()->count());
+    }
+
+    public function test_check_whatsapp_uses_contact_phone_number(): void
+    {
+        Http::fake([
+            'https://api.example.test/*' => Http::response([
+                'existsWhatsapp' => true,
+            ]),
+        ]);
+
+        $user = User::query()->create([
+            'name' => 'Jane Doe',
+            'phone' => '+33 6 12 34 56 78',
+        ]);
+
+        $service = $this->app->make(GreenApiInboxService::class);
+        $response = $service->checkWhatsapp($user);
+
+        $this->assertTrue($response);
+
+        Http::assertSent(function ($request): bool {
+            $payload = $request->data();
+
+            return str_contains($request->url(), '/waInstance123456/checkWhatsapp/secret')
+                && ($payload['phoneNumber'] ?? null) === '33612345678';
+        });
+    }
+
+    public function test_check_whatsapp_returns_false_when_contact_is_not_on_whatsapp(): void
+    {
+        Http::fake([
+            'https://api.example.test/*' => Http::response([
+                'existsWhatsapp' => false,
+            ]),
+        ]);
+
+        $user = User::query()->create([
+            'name' => 'Jane Doe',
+            'phone' => '+33 6 12 34 56 79',
+        ]);
+
+        $service = $this->app->make(GreenApiInboxService::class);
+
+        $this->assertFalse($service->checkWhatsapp($user));
     }
 }
